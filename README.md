@@ -1,3 +1,5 @@
+The goal is to test the impact of buy signals based on different combinations of thresholds from three indicators (Funding Rate, NUPL, and SOPR) on the future price change of Bitcoin. The code aims to understand whether certain specific thresholds of these indicators can predict future price movements of Bitcoin over a 1 to 30-day period.
+
 In Progress: 
 
 Combining multiple variables such as Funding Rate, NUPL, and SOPR makes the analysis complex due to the interactions between them. Multiple thresholds can limit the number of valid signals, making it difficult to identify significant correlations. P-values close to 1 or extreme correlations may indicate that the results are skewed by overly specific or noisy data.
