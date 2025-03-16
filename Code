@@ -1,0 +1,92 @@
+import pandas as pd
+import numpy as np
+from scipy.stats import pearsonr
+
+# Load data from CSV files
+nupl_data = pd.read_csv('2023_07_09_nupl.csv')
+funding_rate_data = pd.read_csv('2023_07_09_bitcoin-funding-rate.csv')
+sopr_data = pd.read_csv('2023_07_09_sopr.csv')
+
+# Rename columns for better understanding
+nupl_data.rename(columns={
+    'BTC price': 'BTC price (NUPL)',
+    'NUPL': 'NUPL Value'
+}, inplace=True)
+
+funding_rate_data.rename(columns={
+    'BTC price': 'BTC price (Funding Rate)',
+    'Funding Rate': 'Funding Rate Value'
+}, inplace=True)
+
+sopr_data.rename(columns={
+    'BTC price': 'BTC price (SOPR)',
+    'SOPR': 'SOPR Value'
+}, inplace=True)
+
+# Merge the three DataFrames on the 'DateTime' column
+merged_data = nupl_data.merge(funding_rate_data, on='DateTime').merge(sopr_data, on='DateTime')
+
+# Convert the 'DateTime' column to datetime format
+merged_data['DateTime'] = pd.to_datetime(merged_data['DateTime'])
+
+# Parameters
+MAX_DELAY = 30  # Maximum delay in days for the analysis
+funding_thresholds = [-0.0005, -0.0002, -0.0001, -0.00005, 0.00005, 0.0001, 0.0002, 0.0005]  # Thresholds to test for Funding Rate
+nupl_thresholds = [0.30, 0.40, 0.50]  # Thresholds to test for NUPL
+sopr_thresholds = [1.01, 1.05, 1.10]  # Thresholds to test for SOPR
+
+# Function to calculate correlations for given thresholds
+def evaluate_thresholds(data, funding_thresholds, nupl_thresholds, sopr_thresholds, max_delay):
+    results = []
+    
+    # Test each combination of thresholds
+    for funding_threshold in funding_thresholds:
+        for nupl_threshold in nupl_thresholds:
+            for sopr_threshold in sopr_thresholds:
+                
+                # Identify buy signals
+                buy_signals = data[
+                    (data['Funding Rate Value'] < funding_threshold) &
+                    (data['NUPL Value'] < nupl_threshold) &
+                    (data['SOPR Value'] < sopr_threshold)
+                ]
+                
+                # Calculate correlations for each delay
+                for delay in range(1, max_delay + 1):
+                    correlations = []
+                    p_values = []
+                    
+                    # For each buy signal
+                    for index, row in buy_signals.iterrows():
+                        # Find future data within the specified delay
+                        future_data = data[(data['DateTime'] > row['DateTime']) & 
+                                           (data['DateTime'] <= row['DateTime'] + pd.Timedelta(days=delay))]
+                        if not future_data.empty:
+                            # Calculate price change
+                            price_change = (future_data['BTC price (Funding Rate)'].iloc[-1] - row['BTC price (Funding Rate)']) / row['BTC price (Funding Rate)']
+                            correlations.append(row['Funding Rate Value'])  # Use Funding Rate here
+                            p_values.append(price_change)  # Price change here
+                            
+                    if correlations and p_values:
+                        r, p = pearsonr(correlations, p_values)
+                        results.append({
+                            'Funding Threshold': funding_threshold,
+                            'NUPL Threshold': nupl_threshold,
+                            'SOPR Threshold': sopr_threshold,
+                            'Delay': delay,
+                            'Correlation': r,
+                            'P-value': p,
+                            'Num_Signals': len(buy_signals)
+                        })
+    
+    return pd.DataFrame(results)
+
+# Test each combination of thresholds
+final_results = evaluate_thresholds(merged_data, funding_thresholds, nupl_thresholds, sopr_thresholds, MAX_DELAY)
+
+# Display the results
+print("Threshold evaluation results:")
+print(final_results)
+
+# Save the results to a CSV file
+final_results.to_csv('threshold_evaluation_results_all_indicators.csv', index=False)
